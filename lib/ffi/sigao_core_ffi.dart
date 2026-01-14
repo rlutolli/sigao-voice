@@ -18,6 +18,9 @@ typedef sigao_audio_ingest_dart = int Function(Pointer<Void> handle, Pointer<Int
 typedef sigao_free_buffer_c = Void Function(Pointer<Float> buffer);
 typedef sigao_free_buffer_dart = void Function(Pointer<Float> buffer);
 
+typedef sigao_detect_handshake_c = Int32 Function(Pointer<Void> handle, Pointer<Int16> pcm, Int32 len);
+typedef sigao_detect_handshake_dart = int Function(Pointer<Void> handle, Pointer<Int16> pcm, int len);
+
 class SigaoCoreFFI {
   late DynamicLibrary _lib;
   late Pointer<Void> _modemHandle;
@@ -27,6 +30,7 @@ class SigaoCoreFFI {
   late sigao_destroy_modem_dart _destroyModem;
   late sigao_modulate_dart _modulate;
   late sigao_audio_ingest_dart _ingest;
+  late sigao_detect_handshake_dart _detect;
   late sigao_free_buffer_dart _freeBuffer;
 
   SigaoCoreFFI() {
@@ -45,6 +49,7 @@ class SigaoCoreFFI {
     _destroyModem = _lib.lookupFunction<sigao_destroy_modem_c, sigao_destroy_modem_dart>("sigao_destroy_modem");
     _modulate = _lib.lookupFunction<sigao_modulate_c, sigao_modulate_dart>("sigao_modulate");
     _ingest = _lib.lookupFunction<sigao_audio_ingest_c, sigao_audio_ingest_dart>("sigao_audio_ingest");
+    _detect = _lib.lookupFunction<sigao_detect_handshake_c, sigao_detect_handshake_dart>("sigao_detect_handshake");
     _freeBuffer = _lib.lookupFunction<sigao_free_buffer_c, sigao_free_buffer_dart>("sigao_free_buffer");
     
     // Create instance
@@ -101,6 +106,21 @@ class SigaoCoreFFI {
     } finally {
       calloc.free(pcmPtr);
       calloc.free(outBufPtr);
+    }
+  }
+  // New: Handshake Detection
+  bool detectHandshake(List<int> pcmData) {
+    if (pcmData.isEmpty) return false;
+    
+    final pcmPtr = calloc<Int16>(pcmData.length);
+    final pcmList = pcmPtr.asTypedList(pcmData.length);
+    pcmList.setAll(0, pcmData);
+
+    try {
+      int result = _detect(_modemHandle, pcmPtr, pcmData.length);
+      return result == 1;
+    } finally {
+      calloc.free(pcmPtr);
     }
   }
 }

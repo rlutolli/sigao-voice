@@ -189,6 +189,36 @@ namespace Sigao {
         
         return "Not Impl"; 
     }
+
+    bool SigaoModem::detect_handshake_tone(const std::vector<float>& samples) {
+        // Goertzel Algorithm for 1900 Hz detection @ 8000 Hz
+        // Block Size N=160 (20ms) -> k = 38 (Exact Integer)
+        // Coeff = 2 * cos(2 * PI * 38 / 160) = 2 * cos(0.475 * PI)
+        // 0.475 * PI = 1.49225 radians -> cos = 0.078459 -> coeff = 0.156918
+        
+        const int N = 160;
+        if (samples.size() < N) return false;
+
+        float coeff = 0.156918f;
+        float q1 = 0.0f;
+        float q2 = 0.0f;
+
+        // Process first N samples
+        for (int i = 0; i < N; ++i) {
+            float q0 = coeff * q1 - q2 + samples[i];
+            q2 = q1;
+            q1 = q0;
+        }
+
+        // Magnitude Squared = q1^2 + q2^2 - q1*q2*coeff
+        float magnitude = q1*q1 + q2*q2 - q1*q2*coeff;
+        
+        // Threshold check (Energy check)
+        // Minimal Signal Strength required
+        // Note: This is simplified. Ideally we normalize by total energy.
+        return magnitude > 100.0f; 
+    }
+
 }
 
     // C-Bridge Implementation
@@ -283,6 +313,23 @@ extern "C" {
         // LOGD("Voice Frame Processed. In: %d samples -> Out: %zu modulated samples", len, res.size());
         
         return static_cast<int>(res.size());
+    }
+
+    SIGAO_API int sigao_detect_handshake(void* handle, const short* pcm, int len) {
+        auto* ctx = static_cast<SigaoContext*>(handle);
+        
+        // Convert Short PCM to Float for DSP
+        std::vector<float> input(len);
+        for(int i=0; i<len; ++i) {
+             input[i] = static_cast<float>(pcm[i]) / 32768.0f;
+        }
+
+        bool detected = ctx->modem->detect_handshake_tone(input);
+        if (detected) {
+            // LOGD("Handshake Tone Detected!");
+            return 1;
+        }
+        return 0;
     }
     
     SIGAO_API int sigao_demodulate(void* handle, const float* signal, int len, char* outMsg, int maxLen, float* outBER) {

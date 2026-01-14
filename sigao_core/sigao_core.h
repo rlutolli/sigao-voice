@@ -40,7 +40,11 @@ namespace Sigao {
         std::vector<float> get_proto_filter(int L);
         
         // Internal DSP
+        // Internal DSP
         std::vector<float> generate_pilots(int num_samples);
+        
+        // Handshake Logic (Goertzel)
+        bool detect_handshake_tone(const std::vector<float>& samples);
     };
 
 }
@@ -54,6 +58,13 @@ extern "C" {
     // Caller must free outBuffer using sigao_free_buffer
     SIGAO_API int sigao_modulate(void* handle, const char* msg, float** outBuffer);
     
+    // Audio Pipeline
+    SIGAO_API int sigao_audio_ingest(void* handle, const short* pcm, int len, float** outBuffer);
+    
+    // Handshake
+    // Returns 1 if 1900Hz Pilot detected, 0 otherwise
+    SIGAO_API int sigao_detect_handshake(void* handle, const short* pcm, int len);
+
     // Returns 0 on success, <0 on error. writes recovered chars to outMsg (pre-allocated)
     SIGAO_API int sigao_demodulate(void* handle, const float* signal, int len, char* outMsg, int maxLen, float* outBER);
     

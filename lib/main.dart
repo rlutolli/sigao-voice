@@ -5,12 +5,18 @@ import 'ui/theme/sigao_theme.dart';
 import 'ui/screens/home_screen.dart';
 import 'services/log_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Preload Audio System for DTMF
+  final audioEngine = AudioEngine();
+  await audioEngine.initSystem();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => LogService()),
-        ChangeNotifierProvider(create: (_) => AudioEngine()),
+        ChangeNotifierProvider.value(value: audioEngine), // Use existing instance
       ],
       child: const SigaoApp(),
     ),

@@ -18,6 +18,18 @@ class AudioEngine extends ChangeNotifier {
   SigaoCoreFFI? _ffi;
   Timer? _captureMockTimer;
 
+  // Pre-initialize SoLoud on startup
+  Future<void> initSystem() async {
+    if (!_soloud.isInitialized) {
+      await _soloud.init(
+        sampleRate: 8000, 
+        bufferSize: 1024, 
+        channels: Channels.mono,
+      );
+      debugPrint("AudioEngine: SoLoud Initialized");
+    }
+  }
+
   Future<void> start() async {
     if (_isRunning) return;
 
@@ -28,14 +40,8 @@ class AudioEngine extends ChangeNotifier {
     }
 
     try {
-      // Initialize SoLoud (miniaudio)
-      if (!_soloud.isInitialized) {
-        await _soloud.init(
-          sampleRate: 8000, 
-          bufferSize: 1024, 
-          channels: Channels.mono,
-        );
-      }
+      // Ensure initialized (if initSystem missed)
+      await initSystem();
 
       // Initialize Core
       _ffi = SigaoCoreFFI();

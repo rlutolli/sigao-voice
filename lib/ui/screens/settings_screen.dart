@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../ui/theme/sigao_theme.dart';
 import 'log_viewer_screen.dart';
+import '../../services/call_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -31,6 +32,19 @@ class SettingsScreen extends StatelessWidget {
           child: Text("Advanced", style: TextStyle(fontWeight: FontWeight.bold, color: SigaoTheme.primaryColor)),
         ),
         ListTile(
+          leading: const Icon(Icons.notifications_active),
+          title: const Text("Simulate Incoming Call"),
+          subtitle: const Text("Test CallKit Integration"),
+          onTap: () async {
+            await CallService().showIncomingCall("Alice (Sigao)", "alice_123");
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Incoming Call Triggered")),
+              );
+            }
+          },
+        ),
+        ListTile(
           leading: const Icon(Icons.terminal),
           title: const Text("Debug Logs"),
           subtitle: const Text("View SigaoNative & Audio Logs"),
@@ -50,7 +64,7 @@ class SettingsScreen extends StatelessWidget {
               context: context,
               applicationName: "Sigao Voice",
               applicationVersion: "0.2.0",
-              applicationLegalese: "UI based on Signal Clone by KareemShaban1. Open Source MIT License.",
+              applicationLegalese: "UI based on Signal Clone. Open Source MIT License.",
               children: [
                 const SizedBox(height: 16),
                 const Text("Core Protocol: Codec2 (1200bps) + FBMC + AES-256-GCM"),

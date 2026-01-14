@@ -23,6 +23,7 @@ dependencies:
   url_launcher: ^6.2.1
   shared_preferences: ^2.2.2
   intl: ^0.19.0
+  uuid: ^4.2.2 # For CallKit IDs
   
   # Professional Integration
   flutter_callkit_incoming: ^2.0.0
