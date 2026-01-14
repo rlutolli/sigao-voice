@@ -1,0 +1,40 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/sigao_core.dir/link.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/codec2.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/codec2.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/codec2_fft.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/codec2_fft.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/interp.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/interp.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/kiss_fft.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/kiss_fft.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/kiss_fftr.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/kiss_fftr.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/lpc.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/lpc.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/lsp.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/lsp.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/newamp1.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/newamp1.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/nlp.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/nlp.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/pack.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/pack.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/phase.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/phase.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/postfilter.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/postfilter.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/quantise.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/quantise.c.o.d"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/sine.c.o"
+  "CMakeFiles/sigao_core.dir/external/codec2/src/sine.c.o.d"
+  "CMakeFiles/sigao_core.dir/sigao_core.cpp.o"
+  "CMakeFiles/sigao_core.dir/sigao_core.cpp.o.d"
+  "libsigao_core.pdb"
+  "libsigao_core.so"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang C CXX)
+  include(CMakeFiles/sigao_core.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()
