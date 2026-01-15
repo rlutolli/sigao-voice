@@ -4,6 +4,7 @@ import '../../ui/theme/sigao_theme.dart';
 import '../../ui/theme/theme_provider.dart';
 import 'log_viewer_screen.dart';
 import '../../services/call_service.dart';
+import '../../services/key_exchange_service.dart';
 import '../../simulation/handshake_simulation.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -57,6 +58,18 @@ class SettingsScreen extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.all(16.0),
           child: Text("Advanced", style: TextStyle(fontWeight: FontWeight.bold, color: SigaoTheme.primaryColor)),
+        ),
+        ListTile(
+          leading: const Icon(Icons.fingerprint),
+          title: const Text("Manage Identity (ECDH)"),
+          subtitle: const Text("Generate New Keypair"),
+          onTap: () {
+            final keyService = Provider.of<KeyExchangeService>(context, listen: false);
+            keyService.generateIdentity();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("New Identity Generated")),
+            );
+          },
         ),
         ListTile(
           leading: const Icon(Icons.sync_alt),

@@ -69,6 +69,11 @@ extern "C" {
     
     SIGAO_API void sigao_free_buffer(float* buffer);
     SIGAO_API const char* sigao_version();
+    
+    // ECDH
+    // Pub/Priv/Shared are all 32 bytes. Caller pre-allocates.
+    SIGAO_API void sigao_gen_keypair(unsigned char* public_key, unsigned char* private_key);
+    SIGAO_API void sigao_compute_secret(unsigned char* shared_secret, const unsigned char* my_private, const unsigned char* their_public);
 }
 
 #endif

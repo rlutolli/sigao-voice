@@ -1,13 +1,26 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'audio/audio_engine.dart';
+import 'ui/theme/sigao_theme.dart';
 import 'ui/theme/theme_provider.dart';
+import 'ui/screens/home_screen.dart';
+import 'services/log_service.dart';
+import 'services/key_exchange_service.dart';
 
-//...
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Preload Audio System for DTMF
+  final audioEngine = AudioEngine();
+  await audioEngine.initSystem();
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => LogService()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider.value(value: audioEngine), // Use existing instance
+        ChangeNotifierProvider(create: (_) => KeyExchangeService()),
+        ChangeNotifierProvider.value(value: audioEngine),
       ],
       child: const SigaoApp(),
     ),
