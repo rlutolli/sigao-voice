@@ -5,6 +5,7 @@ import '../../ui/theme/theme_provider.dart';
 import 'log_viewer_screen.dart';
 import '../../services/call_service.dart';
 import '../../services/key_exchange_service.dart';
+import '../../audio/audio_engine.dart';
 import '../../simulation/handshake_simulation.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -95,6 +96,34 @@ class SettingsScreen extends StatelessWidget {
                 const SnackBar(content: Text("Incoming Call Triggered")),
               );
             }
+          },
+        ),
+        const Divider(),
+        const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text("Phase 3: Audio Pipeline", style: TextStyle(fontWeight: FontWeight.bold, color: SigaoTheme.primaryColor)),
+        ),
+        ListTile(
+          leading: const Icon(Icons.mic),
+          title: const Text("Start Voice Loop (Simulated)"),
+          subtitle: const Text("Ingest Mic -> Codec2 -> Modulate -> Play"),
+          onTap: () {
+            final audio = Provider.of<AudioEngine>(context, listen: false);
+            audio.start(); 
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Audio Pipeline STARTED")),
+            );
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.stop_circle_outlined),
+          title: const Text("Stop Voice Loop"),
+          onTap: () {
+            final audio = Provider.of<AudioEngine>(context, listen: false);
+            audio.stop();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Audio Pipeline STOPPED")),
+            );
           },
         ),
         ListTile(

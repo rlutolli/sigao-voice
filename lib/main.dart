@@ -10,9 +10,9 @@ import 'services/key_exchange_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Preload Audio System for DTMF
+  // Preload Audio System for DTMF (Async / Non-blocking)
   final audioEngine = AudioEngine();
-  await audioEngine.initSystem();
+  audioEngine.initSystem(); // Fire and forget for faster startup
 
   runApp(
     MultiProvider(
