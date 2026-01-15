@@ -12,7 +12,7 @@ void main() async {
   
   // Preload Audio System for DTMF (Async / Non-blocking)
   final audioEngine = AudioEngine();
-  audioEngine.initSystem(); // Fire and forget for faster startup
+  // Init handled in SigaoApp.build via PostFrameCallback for max speed
 
   runApp(
     MultiProvider(
@@ -32,6 +32,11 @@ class SigaoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Defer Audio Init to ensure UI renders first
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+       Provider.of<AudioEngine>(context, listen: false).initSystem();
+    });
+
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         return MaterialApp(

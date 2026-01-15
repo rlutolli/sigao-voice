@@ -53,5 +53,6 @@ class HandshakeSimulation {
     }
     
     _isRunning = false;
+    _ffi.dispose(); // CRITICAL: Fix Memory Leak
   }
 }
