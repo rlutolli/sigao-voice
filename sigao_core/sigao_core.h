@@ -26,6 +26,9 @@ namespace Sigao {
         // High Level API
         std::vector<float> modulate_message(const std::string& message);
         std::string demodulate_signal(const std::vector<float>& signal, float& out_ber);
+        
+        // Handshake Logic (Goertzel)
+        bool detect_handshake_tone(const std::vector<float>& samples);
 
     private:
         int fs;
@@ -40,11 +43,7 @@ namespace Sigao {
         std::vector<float> get_proto_filter(int L);
         
         // Internal DSP
-        // Internal DSP
         std::vector<float> generate_pilots(int num_samples);
-        
-        // Handshake Logic (Goertzel)
-        bool detect_handshake_tone(const std::vector<float>& samples);
     };
 
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../ui/theme/sigao_theme.dart';
 import 'log_viewer_screen.dart';
 import '../../services/call_service.dart';
+import '../../simulation/handshake_simulation.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -30,6 +31,19 @@ class SettingsScreen extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.all(16.0),
           child: Text("Advanced", style: TextStyle(fontWeight: FontWeight.bold, color: SigaoTheme.primaryColor)),
+        ),
+        ListTile(
+          leading: const Icon(Icons.sync_alt),
+          title: const Text("Run Handshake Simulation (2-Party)"),
+          subtitle: const Text("Verify Goertzel Tone Detection"),
+          onTap: () {
+             HandshakeSimulation().runSimulation((log) {
+               ScaffoldMessenger.of(context).showSnackBar(
+                 SnackBar(content: Text(log), duration: const Duration(milliseconds: 500)),
+               );
+               debugPrint(log);
+             });
+          },
         ),
         ListTile(
           leading: const Icon(Icons.notifications_active),
