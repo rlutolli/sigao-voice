@@ -27,6 +27,8 @@ dependencies:
   
   # Professional Integration
   flutter_callkit_incoming: ^2.0.0
+  sodium: ^3.4.6
+  sodium_libs: ^3.4.6+4
   # Using custom DTMF assets
 
 

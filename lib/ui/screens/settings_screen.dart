@@ -4,6 +4,7 @@ import '../../ui/theme/sigao_theme.dart';
 import '../../ui/theme/theme_provider.dart';
 import 'log_viewer_screen.dart';
 import '../../services/call_service.dart';
+import 'package:flutter/services.dart'; // For MethodChannel
 import '../../services/key_exchange_service.dart';
 import '../../services/benchmark_service.dart';
 import '../../audio/audio_engine.dart';
@@ -138,6 +139,22 @@ class SettingsScreen extends StatelessWidget {
             BenchmarkService().runFullSuite((status) {
                debugPrint("[BENCHMARK] $status");
             });
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.security_update),
+          title: const Text("Set as Default Dialer"),
+          subtitle: const Text("Request ROLE_DIALER for InCallService"),
+          onTap: () async {
+             try {
+               const platform = MethodChannel('com.sigao.voice/role');
+               await platform.invokeMethod('requestRole');
+             } catch (e) {
+               debugPrint("Error requesting role: $e");
+               if (context.mounted) {
+                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+               }
+             }
           },
         ),
         ListTile(
