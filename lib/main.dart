@@ -14,17 +14,35 @@ void main() async {
   final audioEngine = AudioEngine();
   // Init handled in SigaoApp.build via PostFrameCallback for max speed
 
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => LogService()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider(create: (_) => KeyExchangeService()),
-        ChangeNotifierProvider.value(value: audioEngine),
-      ],
-      child: const SigaoApp(),
-    ),
-  );
+  // Capture all print/debugPrint calls to LogService
+  runZonedGuarded(() {
+    runApp(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => LogService()),
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => KeyExchangeService()),
+          ChangeNotifierProvider.value(value: audioEngine),
+        ],
+        child: const SigaoApp(),
+      ),
+    );
+  }, (error, stack) {
+    LogService().error("Uncaught: $error");
+    debugPrint("Uncaught: $error");
+  }, zoneSpecification: ZoneSpecification(
+    print: (self, parent, zone, line) {
+      LogService().info(line); // Capture standard prints
+      parent.print(zone, line);
+    },
+  ));
+  
+  // Override debugPrint to also pipe to LogService
+  final originalDebugPrint = debugPrint;
+  debugPrint = (String? message, {int? wrapWidth}) {
+    if (message != null) LogService().debug(message);
+    originalDebugPrint(message, wrapWidth: wrapWidth);
+  };
 }
 
 class SigaoApp extends StatelessWidget {
