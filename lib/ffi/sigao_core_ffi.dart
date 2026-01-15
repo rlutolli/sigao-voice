@@ -131,7 +131,6 @@ class SigaoCoreFFI {
       return result == 1;
     } finally {
       calloc.free(pcmPtr);
-      calloc.free(pcmPtr);
     }
   }
 
