@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../ui/theme/sigao_theme.dart';
+import '../../ui/theme/theme_provider.dart';
 import 'log_viewer_screen.dart';
 import '../../services/call_service.dart';
 import '../../simulation/handshake_simulation.dart';
@@ -9,6 +11,12 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final currentMode = themeProvider.themeMode;
+    String modeText = "System Default";
+    if (currentMode == ThemeMode.light) modeText = "Light";
+    if (currentMode == ThemeMode.dark) modeText = "Dark";
+
     return ListView(
       children: [
         const Padding(
@@ -18,8 +26,26 @@ class SettingsScreen extends StatelessWidget {
         ListTile(
           leading: const Icon(Icons.dark_mode_outlined),
           title: const Text("Appearance"),
-          subtitle: const Text("System Default"),
-          onTap: () {},
+          subtitle: Text(modeText),
+          onTap: () {
+            showDialog(context: context, builder: (ctx) => SimpleDialog(
+              title: const Text("Choose Theme"),
+              children: [
+                SimpleDialogOption(
+                  onPressed: () { themeProvider.setThemeMode(ThemeMode.system); Navigator.pop(ctx); },
+                  child: const Text("System Default"),
+                ),
+                SimpleDialogOption(
+                  onPressed: () { themeProvider.setThemeMode(ThemeMode.light); Navigator.pop(ctx); },
+                  child: const Text("Light"),
+                ),
+                SimpleDialogOption(
+                  onPressed: () { themeProvider.setThemeMode(ThemeMode.dark); Navigator.pop(ctx); },
+                  child: const Text("Dark"),
+                ),
+              ],
+            ));
+          },
         ),
         ListTile(
           leading: const Icon(Icons.lock_outline),

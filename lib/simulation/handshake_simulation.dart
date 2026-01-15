@@ -8,7 +8,7 @@ class HandshakeSimulation {
   bool _isRunning = false;
 
   void runSimulation(Function(String) onLog) async {
-    onLog("--- Starting Handshake Simulation (2 Callers) ---");
+    onLog("-- Starting Handshake Simulation (2 Callers) --");
     _isRunning = true;
 
     // Party A: Caller (Sends 1900Hz Handshake Tone)
@@ -47,7 +47,7 @@ class HandshakeSimulation {
       // 4. Reply (Pong)
       onLog("[B] Sending ACK...");
       // ... ACK logic ...
-      onLog("--- Simulation Complete: Protocol Verified ---");
+      onLog("-- Simulation Complete: Protocol Verified --");
     } else {
       onLog("[B] FAILURE: Handshake Tone NOT Detected!");
     }
