@@ -5,6 +5,7 @@ import '../../ui/theme/theme_provider.dart';
 import 'log_viewer_screen.dart';
 import '../../services/call_service.dart';
 import '../../services/key_exchange_service.dart';
+import '../../services/benchmark_service.dart';
 import '../../audio/audio_engine.dart';
 import '../../simulation/handshake_simulation.dart';
 
@@ -124,6 +125,19 @@ class SettingsScreen extends StatelessWidget {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Audio Pipeline STOPPED")),
             );
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.speed),
+          title: const Text("Run System Benchmark"),
+          subtitle: const Text("Stress Test Crypto, Modem & FFI"),
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Benchmark Started (Check Logs)...")),
+            );
+            BenchmarkService().runFullSuite((status) {
+               debugPrint("[BENCHMARK] $status");
+            });
           },
         ),
         ListTile(
