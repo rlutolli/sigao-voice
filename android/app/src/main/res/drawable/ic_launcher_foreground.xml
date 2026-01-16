@@ -1,0 +1,29 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    
+    <!-- Neon Green Color -->
+    <path
+        android:strokeColor="#00ff41"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="
+            M 22 50 L 36 28 L 50 72 L 64 36 L 78 50
+        " />
+        
+    <!-- Circle (Solid approximation since dash not supported in API 21 vector) -->
+    <!-- M 50 8 implies Top Center (If cy=50, r=42, top is 50,8) -->
+    <path
+        android:strokeColor="#00ff41"
+        android:strokeWidth="5"
+        android:fillColor="#00000000"
+        android:pathData="
+            M 50,8
+            A 42,42 0 1 1 50,92
+            A 42,42 0 1 1 50,8
+        " />
+</vector>

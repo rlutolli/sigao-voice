@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:sodium_libs/sodium_libs.dart';
+import '../ffi/sigao_core_ffi.dart'; // FFI Import
+import 'log_service.dart';
 import 'dart:typed_data';
 
 class KeyExchangeService extends ChangeNotifier {
   // Native Keystore Channel
   static const _keystoreChannel = MethodChannel('com.sigao.voice/keystore');
+  final SigaoCoreFFI _coreFFI = SigaoCoreFFI(); // Restored for Phase 6 fallback to Native
   
   // Sodium (Ephemeral Keys)
   late Sodium _sodium;
@@ -73,7 +76,7 @@ class KeyExchangeService extends ChangeNotifier {
 
     // 1. Generate Ephemeral Key (Software)
     _ephemeralKeyPair = _sodium.crypto.box.keyPair();
-    final ephPub = _ephemeralKeyPair!.pk;
+    final ephPub = _ephemeralKeyPair!.publicKey;
 
     // 2. Sign it with Hardware Identity (Authenticity)
     final signature = await _keystoreChannel.invokeMethod('sign', {
@@ -91,13 +94,16 @@ class KeyExchangeService extends ChangeNotifier {
   void computeSharedSecret(Uint8List theirEphemeralPub) {
     if (_ephemeralKeyPair == null) return;
     
-    // X25519 Diffie-Hellman
-    _sharedSecret = _sodium.crypto.scalarmult(
-      n: _ephemeralKeyPair!.sk,
-      p: theirEphemeralPub
-    );
+    // X25519 Diffie-Hellman via SigaoCore Native (Reliable)
+    _ephemeralKeyPair!.secretKey.runUnlockedSync((secretBytes) {
+      final secretList = _coreFFI.computeSharedSecret(
+          secretBytes, 
+          theirEphemeralPub
+      );
+      _sharedSecret = Uint8List.fromList(secretList);
+    });
     
     notifyListeners();
-    debugPrint("ECDH: Session Established (StrongBox Authenticated)");
+    debugPrint("ECDH: Session Established (Native verified)");
   }
 }

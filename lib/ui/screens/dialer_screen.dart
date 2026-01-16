@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/keypad_button.dart';
@@ -64,6 +65,7 @@ class _DialerScreenState extends State<DialerScreen> {
               textAlign: TextAlign.center,
               readOnly: true,
               showCursor: false, // No cursor like real dialer
+              enableIMEPersonalizedLearning: false, // Incognito Keyboard
               style: TextStyle(
                 fontSize: 36,
                 fontWeight: FontWeight.w400,
@@ -108,10 +110,11 @@ class _DialerScreenState extends State<DialerScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 48.0),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Distribute evenly
               children: [
-                 const SizedBox(width: 64), // Balance right side
-                 
+                 // Left spacer (to balance Backspace) or Voicemail logic
+                 const SizedBox(width: 64, height: 64), 
+
                  // Google-Style Floating FAB
                  SizedBox(
                    width: 72,
@@ -128,6 +131,7 @@ class _DialerScreenState extends State<DialerScreen> {
                  // Backspace
                  SizedBox(
                    width: 64,
+                   height: 64,
                    child: IconButton(
                      onPressed: _onDelete,
                      icon: Icon(Icons.backspace_outlined, color: txtColor.withOpacity(0.7)),
@@ -140,5 +144,30 @@ class _DialerScreenState extends State<DialerScreen> {
         ],
       ),
     );
+  }
+
+  // --- Test Logic ---
+  static const platform = MethodChannel('com.sigao.voice/handshake');
+
+  Future<void> _startGhostTest() async {
+    try {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bob Mode: Listening for 3kHz...")));
+      }
+      await platform.invokeMethod('startListener');
+    } catch (e) {
+      print("Failed to start listener: $e");
+    }
+  }
+
+  Future<void> _startGhostCall() async {
+    try {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Alice Mode: Calling (3kHz)...")));
+      }
+      await platform.invokeMethod('startCall');
+    } catch (e) {
+      print("Failed to start call: $e");
+    }
   }
 }

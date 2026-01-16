@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class LogService extends ChangeNotifier {
   static final LogService _instance = LogService._internal();
   factory LogService() => _instance;
-  LogService._internal();
+  
+  LogService._internal() {
+    // Listen to Native Logs from MainActivity
+    const EventChannel('com.sigao.voice/logs').receiveBroadcastStream().listen((event) {
+      // Direct add, skip timestamp if native log already has it, or just use current time
+      // Native logs are raw strings. Let's add them via _addLog which adds timestamp.
+      _addLog(event.toString());
+    }, onError: (dynamic error) {
+      _addLog("[ERROR] Log Stream: ${error.toString()}");
+    });
+  }
 
   final List<String> _logs = [];
   List<String> get logs => _logs;

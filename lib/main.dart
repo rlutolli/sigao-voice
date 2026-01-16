@@ -1,3 +1,4 @@
+import 'dart:async'; // For runZonedGuarded
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'audio/audio_engine.dart';
@@ -6,6 +7,7 @@ import 'ui/theme/theme_provider.dart';
 import 'ui/screens/home_screen.dart';
 import 'services/log_service.dart';
 import 'services/key_exchange_service.dart';
+import 'services/contacts_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +24,7 @@ void main() async {
           ChangeNotifierProvider(create: (_) => LogService()),
           ChangeNotifierProvider(create: (_) => ThemeProvider()),
           ChangeNotifierProvider(create: (_) => KeyExchangeService()),
+          ChangeNotifierProvider(create: (_) => ContactsProvider()), // New
           ChangeNotifierProvider.value(value: audioEngine),
         ],
         child: const SigaoApp(),

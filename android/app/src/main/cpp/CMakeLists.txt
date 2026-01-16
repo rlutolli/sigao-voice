@@ -54,6 +54,7 @@ set(CODEC2_SOURCES
 
 add_library(sigao_core SHARED
             ${SIGAO_CORE_DIR}/sigao_core.cpp
+            ${SIGAO_CORE_DIR}/SigaoDSP.cpp
             ${CODEC2_SOURCES})
 
 # Links

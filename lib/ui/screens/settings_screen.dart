@@ -60,20 +60,21 @@ class SettingsScreen extends StatelessWidget {
         const Divider(),
         const Padding(
           padding: EdgeInsets.all(16.0),
-          child: Text("Advanced", style: TextStyle(fontWeight: FontWeight.bold, color: SigaoTheme.primaryColor)),
+          child: Text("Advanced Audio & Security", style: TextStyle(fontWeight: FontWeight.bold, color: SigaoTheme.primaryColor)),
         ),
         ListTile(
-          leading: const Icon(Icons.fingerprint),
-          title: const Text("Manage Identity (ECDH)"),
-          subtitle: const Text("Generate New Keypair"),
-          onTap: () {
-            final keyService = Provider.of<KeyExchangeService>(context, listen: false);
-            keyService.generateIdentity();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("New Identity Generated")),
-            );
+          leading: const Icon(Icons.security_update),
+          title: const Text("Rotate Identity Key"),
+          subtitle: const Text("Force new Curve25519 Keypair"),
+          onTap: () async {
+             await Provider.of<KeyExchangeService>(context, listen: false).generateIdentity();
+             if (context.mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("New Identity Key Generated")));
+             }
           },
         ),
+        // Phase 3 Pipeline removed visually but exists in code structure if needed
+        // (Voice Loop settings were removed in previous step)
         ListTile(
           leading: const Icon(Icons.sync_alt),
           title: const Text("Run Handshake Simulation (2-Party)"),
@@ -100,47 +101,9 @@ class SettingsScreen extends StatelessWidget {
             }
           },
         ),
-        const Divider(),
-        const Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Text("Phase 3: Audio Pipeline", style: TextStyle(fontWeight: FontWeight.bold, color: SigaoTheme.primaryColor)),
-        ),
-        ListTile(
-          leading: const Icon(Icons.mic),
-          title: const Text("Start Voice Loop (Simulated)"),
-          subtitle: const Text("Ingest Mic -> Codec2 -> Modulate -> Play"),
-          onTap: () {
-            final audio = Provider.of<AudioEngine>(context, listen: false);
-            audio.start(); 
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Audio Pipeline STARTED")),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.stop_circle_outlined),
-          title: const Text("Stop Voice Loop"),
-          onTap: () {
-            final audio = Provider.of<AudioEngine>(context, listen: false);
-            audio.stop();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Audio Pipeline STOPPED")),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.speed),
-          title: const Text("Run System Benchmark"),
-          subtitle: const Text("Stress Test Crypto, Modem & FFI"),
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Benchmark Started (Check Logs)...")),
-            );
-            BenchmarkService().runFullSuite((status) {
-               debugPrint("[BENCHMARK] $status");
-            });
-          },
-        ),
+
+
+
         ListTile(
           leading: const Icon(Icons.security_update),
           title: const Text("Set as Default Dialer"),

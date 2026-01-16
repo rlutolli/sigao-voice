@@ -1,0 +1,3 @@
+/home/rlutolli/Desktop/uni/INDIVIDUAL_PROJECT/sigao-voice/sigao_core/build_host/CMakeFiles/sigao_core.dir
+/home/rlutolli/Desktop/uni/INDIVIDUAL_PROJECT/sigao-voice/sigao_core/build_host/CMakeFiles/edit_cache.dir
+/home/rlutolli/Desktop/uni/INDIVIDUAL_PROJECT/sigao-voice/sigao_core/build_host/CMakeFiles/rebuild_cache.dir

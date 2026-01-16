@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -Wl,--dependency-file=CMakeFiles/sigao_core.dir/link.d -shared -Wl,-soname,libsigao_core.so -o libsigao_core.so CMakeFiles/sigao_core.dir/sigao_core.cpp.o CMakeFiles/sigao_core.dir/SigaoDSP.cpp.o CMakeFiles/sigao_core.dir/mock_codec2.c.o  /usr/lib/x86_64-linux-gnu/libcrypto.so -lm

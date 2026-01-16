@@ -47,10 +47,20 @@ option(INSTALL_HEADERS "Install headers" OFF)
 # Let's stick to defining the library here with known sources for Mode 1300.
 # Assuming standard set above + specific mode files.
 
-add_library(sigao_core SHARED 
-    sigao_core.cpp
-    ${CODEC2_SOURCES}
-)
+if(ANDROID)
+    add_library(sigao_core SHARED 
+        sigao_core.cpp
+        SigaoDSP.cpp
+        mock_codec2.c
+    )
+else()
+    # Host Build: Mock Codec2 to verify DSP logic without full Vocoder build
+    add_library(sigao_core SHARED 
+        sigao_core.cpp
+        SigaoDSP.cpp
+        mock_codec2.c
+    )
+endif()
 
 if(OpenSSL_FOUND)
     target_link_libraries(sigao_core OpenSSL::Crypto)
@@ -60,8 +70,13 @@ else()
 endif()
 
 # Link math and android log library
-find_library(log-lib log)
-target_link_libraries(sigao_core m ${log-lib})
+# Link math
+target_link_libraries(sigao_core m)
+
+if(ANDROID)
+    find_library(log-lib log)
+    target_link_libraries(sigao_core ${log-lib})
+endif()
 
 # Export for FFI
 set_target_properties(sigao_core PROPERTIES 

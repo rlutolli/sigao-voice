@@ -3,6 +3,9 @@ import 'calls_screen.dart';
 import 'contacts_screen.dart';
 import 'dialer_screen.dart';
 import 'settings_screen.dart';
+import 'package:provider/provider.dart';
+import '../../services/contacts_provider.dart';
+import '../helpers/contacts_search_delegate.dart';
 import '../../ui/theme/sigao_theme.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -43,7 +46,16 @@ class _HomeScreenState extends State<HomeScreen> {
         elevation: 0,
         actions: [
           if (_selectedIndex == 1) // Contacts
-             IconButton(icon: const Icon(Icons.search), onPressed: () {}),
+             IconButton(
+               icon: const Icon(Icons.search), 
+               onPressed: () {
+                 final provider = Provider.of<ContactsProvider>(context, listen: false);
+                 showSearch(
+                   context: context, 
+                   delegate: ContactsSearchDelegate(provider.contacts),
+                 );
+               }
+             ),
           if (_selectedIndex == 0) // Calls
              IconButton(icon: const Icon(Icons.filter_list), onPressed: () {}),
         ],

@@ -24,7 +24,7 @@ class SigaoInCallService : InCallService() {
                 Log.d(TAG, "onStateChanged: $state")
                 
                 if (state == Call.STATE_ACTIVE) {
-                    performHandshakeInit()
+                    performHandshakeInit(call)
                 }
             }
         })
@@ -42,7 +42,9 @@ class SigaoInCallService : InCallService() {
         Log.d(TAG, "onCallRemoved")
     }
 
-    private fun performHandshakeInit() {
+    private var ghostManager: com.sigao.sigao_voice.prototypes.logic.GhostHandshakeManager? = null
+
+    private fun performHandshakeInit(call: Call) {
         Log.d(TAG, "Attempting Handshake Initialization...")
         
         // 1. Lock Audio State (Request Focus / Mode)
@@ -54,9 +56,8 @@ class SigaoInCallService : InCallService() {
         var targetDevice: AudioDeviceInfo? = null
         
         for (device in devices) {
-            // In Phase 5/6 we will look for specific TYPE_BLUETOOTH_SCO or TYPE_BUS
-            // For now, looking for Earpiece as fallback per plan
-            if (device.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE) {
+            // Looking for Earpiece as fallback per plan or Bluetooth SCO
+            if (device.type == AudioDeviceInfo.TYPE_BUILTIN_EARPIECE || device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
                 targetDevice = device
             }
         }
@@ -65,11 +66,27 @@ class SigaoInCallService : InCallService() {
         if (targetDevice != null) {
             val result = audioManager.setCommunicationDevice(targetDevice)
             Log.d(TAG, "setCommunicationDevice result: $result (Device: ${targetDevice.type})")
-            
-            // 4. Trigger Native DSP (Stub for now)
-            // SigaoNative.startHandshake() 
         } else {
             Log.w(TAG, "No suitable audio device found for Secure Handshake")
         }
+        
+        // 4. Trigger Native Ghost Handshake
+        if (ghostManager == null) {
+            val context = this
+            val crypto = com.sigao.sigao_voice.prototypes.security.CryptoEngine()
+            val identity = com.sigao.sigao_voice.prototypes.security.IdentityManager(context)
+            val msgBuffer = com.sigao.sigao_voice.prototypes.logic.MessageBuffer()
+            val orchestrator = com.sigao.sigao_voice.prototypes.logic.ProtocolOrchestrator(context, crypto, identity, msgBuffer)
+            val transceiver = com.sigao.sigao_voice.prototypes.logic.AudioTransceiver(audioManager)
+            
+            // Mock My Number (Prototype) - In Phase 6, fetch from TelephonyManager
+            val myNum = "15551234567" 
+            
+            ghostManager = com.sigao.sigao_voice.prototypes.logic.GhostHandshakeManager(transceiver, orchestrator, myNum)
+        }
+        
+        // Extract Remote Number
+        val handle = call.details.handle?.schemeSpecificPart ?: "Unknown"
+        ghostManager?.onCallEstablished(handle)
     }
 }
