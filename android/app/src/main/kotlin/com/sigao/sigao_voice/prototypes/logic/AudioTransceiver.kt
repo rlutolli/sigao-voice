@@ -43,6 +43,9 @@ class AudioTransceiver(private val audioManager: AudioManager) {
         const val FREQUENCY_GHOST_PONG = 19500.0     // 19.5kHz (Silent Pong)
         const val FREQUENCY_UNIVERSAL_PONG = 2500.0  // 2.5kHz (Audible Pong)
         
+        // Phase 6: Pilot Tone
+        const val FREQUENCY_PILOT = 410.0 // 410Hz Pilot Tone (-18dB)
+        
         const val DURATION_MS = 1000
     }
 
@@ -51,22 +54,50 @@ class AudioTransceiver(private val audioManager: AudioManager) {
     // Fix: Reusable AudioTrack to prevent 'Out of AudioTracks' native crash
     private var currentAudioTrack: AudioTrack? = null
 
+    // Drift Tracking
+    private var lastPilotPhase = 0.0
+
     /**
      * Injects a Sine Wave into the Speaker (MEDIA stream, not earpiece).
      * Uses blocking playback to ensure audio completes before returning.
      */
     fun sendPing(freq: Double = FREQUENCY_PING) {
+        lastPingTimestamp = System.currentTimeMillis()
         log("sendPing: Generating ${freq}Hz tone...")
         val tone = generateSineWave(freq, DURATION_MS)
-        playAudioBlocking(tone)
+        val mixedTone = mixPilotTone(tone) // Mix 410Hz Pilot
+        playAudioBlocking(mixedTone)
         log("sendPing: Done.")
     }
 
     fun sendCompositePing(freq1: Double, freq2: Double) {
+        lastPingTimestamp = System.currentTimeMillis()
         log("sendCompositePing: Generating Mixed Layered Tone (${freq1}Hz + ${freq2}Hz)...")
         val tone = generateCompositeSine(freq1, freq2, 300) // 300ms as per spec
-        playAudioBlocking(tone)
+        val mixedTone = mixPilotTone(tone) // Mix 410Hz Pilot
+        playAudioBlocking(mixedTone)
         log("sendCompositePing: Done.")
+    }
+
+    private fun mixPilotTone(original: ShortArray): ShortArray {
+        val pilot = generateSineWave(FREQUENCY_PILOT, (original.size * 1000) / SAMPLE_RATE)
+        val mixed = ShortArray(original.size)
+        // Mixing Ratio: 90% Signal + 10% Pilot (-20dB approx)
+        for (i in original.indices) {
+            val signal = original[i]
+            val pilotSample = (pilot.getOrElse(i) { 0 } * 0.1).toInt()
+            mixed[i] = (signal * 0.9 + pilotSample).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return mixed
+    }
+
+    private fun trackPilotDrift(buffer: ShortArray) {
+        val pilotMag = goertzel(buffer, FREQUENCY_PILOT, SAMPLE_RATE)
+        if (pilotMag > 1e7) {
+            // Simplified Drift Logic: Just log tracking for prototype.
+            // In real DSP, we'd compare Phase Delta.
+            log("Pilot Tracker: 410Hz Detected (Mag=${String.format("%.2e", pilotMag)}). Sync OK.")
+        }
     }
 
     /**
@@ -183,6 +214,10 @@ class AudioTransceiver(private val audioManager: AudioManager) {
                 while (isListening) {
                      val read = audioRecord?.read(buffer, 0, bufferSize) ?: 0
                      if (read > 0) {
+                         if (isSelfBlanking()) {
+                             continue
+                         }
+                         trackPilotDrift(buffer) // Phase 6: Pilot Tracker
                          val magnitude = goertzel(buffer, targetFreq, SAMPLE_RATE)
                          frameCount++
                          
@@ -194,7 +229,7 @@ class AudioTransceiver(private val audioManager: AudioManager) {
                          // Threshold: 1e8 works for laptop's audio
                          if (magnitude > 1e8) { 
                              log("DETECTED ${targetFreq}Hz! mag=${String.format("%.2e", magnitude)}")
-                             duckAudio() 
+                             muteProximity() 
                              // Callback must be on Main Thread if it interacts with UI/Channels
                              android.os.Handler(android.os.Looper.getMainLooper()).post {
                                  onSignalDetected(targetFreq)
@@ -235,6 +270,10 @@ class AudioTransceiver(private val audioManager: AudioManager) {
             while (isListening) {
                  val read = record.read(buffer, 0, bufferSize) ?: 0
                  if (read > 0) {
+                     if (isSelfBlanking()) {
+                         continue
+                     }
+                     trackPilotDrift(buffer) // Phase 6: Pilot Tracker
                      val mag1 = goertzel(buffer, freq1, SAMPLE_RATE)
                      val mag2 = goertzel(buffer, freq2, SAMPLE_RATE)
                      
@@ -250,7 +289,7 @@ class AudioTransceiver(private val audioManager: AudioManager) {
                          // If confirmed
                          if (hits1 >= 2 || hits2 >= 2) {
                              log("Dual Detect: F1($freq1)=$detected1, F2($freq2)=$detected2")
-                             duckAudio()
+                             muteProximity()
                              android.os.Handler(android.os.Looper.getMainLooper()).post {
                                  onResult(detected1, detected2)
                              }
@@ -279,9 +318,116 @@ class AudioTransceiver(private val audioManager: AudioManager) {
     /**
      * Immediately lowers call volume to hide the ultrasonic noise from the user.
      */
-    private fun duckAudio() {
-        // audioManager.adjustVolume(AudioManager.ADJUST_LOWER, ...)
+    private var audioFocusRequest: android.media.AudioFocusRequest? = null
+    private var lastPingTimestamp: Long = 0
+
+    /**
+     * Mutes the microphone and requests Audio Focus to "Duck" other apps (System Dialer).
+     * If focus fails, falls back to Comfort Noise masking.
+     */
+    fun muteProximity() {
+        log("muteProximity: Requesting Audio Focus (DUCK) & Muting Mic...")
+        
+        try {
+            // 1. Mic Mute
+            if (!audioManager.isMicrophoneMute) {
+                audioManager.isMicrophoneMute = true
+            }
+
+            // 2. Audio Focus (Android 8.0+)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                audioFocusRequest = android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setAudioAttributes(
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .build()
+                
+                val res = audioManager.requestAudioFocus(audioFocusRequest!!)
+                if (res == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                    log("muteProximity: Audio Focus GRANTED (Ducking)")
+                } else {
+                    log("muteProximity: Audio Focus DENIED. Engaging Comfort Noise mask.")
+                    playComfortNoise()
+                }
+            } else {
+                // Legacy
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            }
+        } catch (e: Exception) {
+            log("muteProximity FAILED", e)
+        }
     }
+
+    fun unmuteProximity() {
+        log("unmuteProximity: Abandoning Focus & Unmuting...")
+        try {
+            if (audioManager.isMicrophoneMute) {
+                audioManager.isMicrophoneMute = false
+            }
+            
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && audioFocusRequest != null) {
+                audioManager.abandonAudioFocusRequest(audioFocusRequest!!)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.abandonAudioFocus(null)
+            }
+        } catch (e: Exception) {
+            log("unmuteProximity FAILED", e)
+        }
+    }
+
+    /**
+     * White Noise generator to mask 2.2kHz tone if Ducking fails.
+     */
+    private fun playComfortNoise() {
+        Thread {
+            try {
+                val durationMs = 1500
+                val noise = generateWhiteNoise(durationMs)
+                // Play at 10% volume
+                playAudioBlocking(noise) 
+            } catch (e: Exception) {
+                log("playComfortNoise Failed", e)
+            }
+        }.start()
+    }
+    
+    private fun generateWhiteNoise(durationMs: Int): ShortArray {
+        val numSamples = (SAMPLE_RATE * durationMs / 1000)
+        val sample = ShortArray(numSamples)
+        val random = java.util.Random()
+        for (i in 0 until numSamples) {
+            // Low amplitude noise (approx 5% of max volume)
+            sample[i] = ((random.nextDouble() * 2.0 - 1.0) * (Short.MAX_VALUE * 0.05)).toInt().toShort()
+        }
+        return sample
+    }
+
+    fun isBluetoothActive(): Boolean {
+        return try {
+            if (audioManager.isBluetoothA2dpOn || audioManager.isBluetoothScoOn) return true
+            
+            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            devices.any { it.type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || 
+                          it.type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                          it.type == android.media.AudioDeviceInfo.TYPE_BLE_HEADSET }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Checks if we are in the "Self-Blanking" window (400ms after sending Ping).
+     */
+    private fun isSelfBlanking(): Boolean {
+         return (System.currentTimeMillis() - lastPingTimestamp) < 400
+    }
+
+
 
     fun playFSKKey(baseFreq: Double) {
         val shift = 500.0

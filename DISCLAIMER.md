@@ -9,4 +9,11 @@ This software, "Sigao Voice," is a Proof-of-Concept (PoC) developed solely for a
 3.  **Carrier Terms of Service**: Configuring this software to bypass standard voice compression algorithms (vocoders) or to use cellular voice channels for data transmission may violate the Terms of Service of your mobile network operator. The authors assume no liability for account termination, service interruption, or other penalties incurred.
 4.  **No Liability**: The code is provided "AS IS", without warranty of any kind, express or implied. The authors and contributors shall not be held liable for any claim, damages, or other liability arising from the use or misuse of this software.
 
-By using this software, you agree to these terms.
+5.  **Jurisdictional Specific Warnings**:
+    *   **Balkans & EU**: Using this software to bypass vocoders or simulate voice traffic for data transmission may be classified as "Interconnect Fraud" or "SIM Boxing" under local telecommunications laws. Sigao Voice must not be used to avoid termination fees.
+    *   **Authoritarian Regimes**: In jurisdictions such as China, Russia, or Iran, the use of unauthorized encryption or non-standard modulation techniques is likely a criminal offense.
+    *   **Australia/UK**: Be aware that refusal to comply with a judicial order to decrypt data or provide access credentials may result in imprisonment.
+
+6.  **No "Uninterceptable" Claims**: This software is designed for *resilience* against network degradation, not immunity from lawful interception. The authors explicitly disclaim any representation that this tool provides "uncrackable" communications or forensic immunity.
+
+By using this software, you agree to these terms and acknowledge that you have read the [Legal Transparency Report](LEGAL_TRANSPARENCY_REPORT.md).

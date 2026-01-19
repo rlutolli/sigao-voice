@@ -3,21 +3,27 @@ package com.sigao.sigao_voice.prototypes.security
 import android.content.Context
 import android.util.Base64
 import java.security.MessageDigest
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * Manages Identity Trust Lifecycle.
- * Implements TOFU (Trust On First Use) and Safety Number generation.
+ * Implements TOFU (Trust On First Use), Safety Number generation,
+ * and Double Ratchet Session Keys.
  */
 class IdentityManager(private val context: Context) {
 
     // In-memory store for prototype (Prod would use SecureDatabase)
-    private val trustedKeys = mutableMapOf<String, String>() // Phone -> Base64(PublicKey)
+    private val trustedKeys = mutableMapOf<String, String>() // Phone -> Base64(IdentityKey)
+    
+    // Session Keys for 1:1 Double Ratchet
+    private val sessionKeys = mutableMapOf<String, SecretKeySpec>() // Phone -> CurrentChainKey
+    
+    // Group Sender Keys (GroupId -> MySenderKey)
+    private val groupSenderKeys = mutableMapOf<String, SecretKeySpec>()
 
     /**
      * Verifies the identity of a remote contact.
      * Implements TOFU.
-     * 
-     * @throws SecurityException If the key has changed (Potential Man-In-The-Middle).
      */
     fun verifyIdentity(phoneNumber: String, remotePublicKey: ByteArray) {
         val remoteKeyStr = Base64.encodeToString(remotePublicKey, Base64.NO_WRAP)
@@ -36,7 +42,6 @@ class IdentityManager(private val context: Context) {
 
     /**
      * Generates a "Safety Number" fingerprint for manual verification.
-     * Uses SHA-256(Sorted(MyKey || TheirKey)).
      */
     fun generateSafetyNumber(myPublicKey: ByteArray, theirPublicKey: ByteArray): String {
         // Deterministic ordering to ensure A->B and B->A generate same number
@@ -52,7 +57,31 @@ class IdentityManager(private val context: Context) {
         val digest = MessageDigest.getInstance("SHA-256")
         val hash = digest.digest(combined.toByteArray(Charsets.UTF_8))
         
-        // Convert to numeric chunks for easier reading (e.g. 12345 67890)
-        return hash.take(15).joinToString("") { "%02d".format(it) }.substring(0, 30) // Simplified
+        return hash.take(15).joinToString("") { "%02d".format(it) }.substring(0, 30)
+    }
+
+    // --- Double Ratchet Session Logic ---
+
+    fun rotateSessionKey(phoneNumber: String) {
+        // Mock Ratchet: Hash previous key to get next key
+        val currentKey = sessionKeys[phoneNumber] ?: generateInitialSessionKey()
+        val nextKeyBytes = MessageDigest.getInstance("SHA-256").digest(currentKey.encoded)
+        sessionKeys[phoneNumber] = SecretKeySpec(nextKeyBytes, "AES")
+    }
+
+    fun getEncryptionKey(phoneNumber: String): SecretKeySpec {
+        return sessionKeys.getOrPut(phoneNumber) { generateInitialSessionKey() }
+    }
+
+    private fun generateInitialSessionKey(): SecretKeySpec {
+        return SecretKeySpec("MockInitialKey123".toByteArray(), "AES")
+    }
+
+    // --- Group Sender Keys ---
+
+    fun getGroupSenderKey(groupId: String): SecretKeySpec {
+        return groupSenderKeys.getOrPut(groupId) { 
+            SecretKeySpec("GroupKey_${groupId}".toByteArray().take(16).toByteArray(), "AES") 
+        }
     }
 }

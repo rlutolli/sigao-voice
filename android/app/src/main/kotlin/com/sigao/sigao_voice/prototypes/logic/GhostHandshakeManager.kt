@@ -14,73 +14,109 @@ class GhostHandshakeManager(
     private val myPhoneNumber: String // "My" phone number for collision logic
 ) {
 
-    private val isHandshakeComplete = AtomicBoolean(false)
+    private val handshakeState = HandshakeState()
+    private val handler = Handler(Looper.getMainLooper())
     private var amIAlice = false
 
     /**
      * Called when a call is established (OFFHOOK).
      */
+    /**
+     * Called when a call is established (OFFHOOK).
+     */
     fun onCallEstablished(remotePhoneNumber: String) {
-        if (isHandshakeComplete.get()) return
+        if (handshakeState.getCurrentState() != HandshakeState.State.IDLE) return
 
+        handshakeState.transitionTo(HandshakeState.State.STABILIZING)
+        log("onCallEstablished: Stabilizing for 500ms...")
+
+        handler.postDelayed({
+            performSignalCheck(remotePhoneNumber)
+        }, 500)
+    }
+
+    private fun performSignalCheck(remotePhoneNumber: String) {
+        handshakeState.transitionTo(HandshakeState.State.SIGNAL_CHECK)
+        log("performSignalCheck: Measuring Noise Floor (100ms)...")
+        
+        // Mock Signal Check (in real impl, we'd run AudioRecord briefly)
+        handler.postDelayed({
+            // Assuming signal is good
+            startHandshakeSequence(remotePhoneNumber)
+        }, 100)
+    }
+
+    private fun startHandshakeSequence(remotePhoneNumber: String) {
         amIAlice = determineInitiator(myPhoneNumber, remotePhoneNumber)
-        log("onCallEstablished (Hybrid): myNum=$myPhoneNumber, remote=$remotePhoneNumber. amIAlice=$amIAlice")
+        log("startHandshakeSequence: amIAlice=$amIAlice")
 
         if (amIAlice) {
-            // Role: Alice (Initiator)
-            // 1. Send Layered Ping (2.2kHz + 19kHz)
-            log("Alice: Sending LAYERED PING (2.2k + 19k)...")
-            audioTransceiver.sendCompositePing(
-                AudioTransceiver.FREQUENCY_UNIVERSAL, 
+            runAliceSequence(remotePhoneNumber)
+        } else {
+            runBobSequence(remotePhoneNumber)
+        }
+    }
+
+    private fun runAliceSequence(remotePhoneNumber: String) {
+        handshakeState.transitionTo(HandshakeState.State.SENDING_PING)
+        
+        // 1. Mute / Duck
+        audioTransceiver.muteProximity()
+        
+        // 2. Check for Bluetooth (Force 2.2kHz Stealth if needed)
+        val isBluetooth = audioTransceiver.isBluetoothActive()
+        
+        if (isBluetooth) {
+            log("Alice: BLUETOOTH DETECTED. Using Stealth 2.2kHz only (19kHz skipped).")
+            audioTransceiver.sendPing(AudioTransceiver.FREQUENCY_UNIVERSAL)
+        } else {
+             log("Alice: Speaker Active. Sending Composite Ping (2.2k + 19k).")
+             audioTransceiver.sendCompositePing(
+                AudioTransceiver.FREQUENCY_UNIVERSAL,
                 AudioTransceiver.FREQUENCY_GHOST_PING
             )
+        }
+
+        // 3. Listen for Pong
+        handshakeState.transitionTo(HandshakeState.State.LISTENING_FOR_PING)
+        log("Alice: Listening for PONG...")
+        
+        audioTransceiver.startDualListening(
+            AudioTransceiver.FREQUENCY_UNIVERSAL_PONG,
+            AudioTransceiver.FREQUENCY_GHOST_PONG
+        ) { audiblePong, silentPong ->
             
-            // 2. Listen for Pong (Either 19.5k Silent or 2.5k Audible)
-            log("Alice: Listening for PONG (19.5k OR 2.5k)...")
-            audioTransceiver.startDualListening(
-                AudioTransceiver.FREQUENCY_UNIVERSAL_PONG, // 2.5k
-                AudioTransceiver.FREQUENCY_GHOST_PONG      // 19.5k
-            ) { audiblePong, silentPong ->
-                 
-                 log("Alice: Pong Detected! Silent=$silentPong, Audible=$audiblePong")
-                 
-                 // If Silent Pong -> Great!
-                 // If Audible Pong -> Good, but fallback mode.
-                 
-                 // 3. Send Key Payload (Simplified: Using 18.5kHz still? Or Audible Key?)
-                 // User spec: "Encryption is seamless and invisible."
-                 // If we heard Audible Pong, implies 19k failed. So we should send AUDIBLE Key?
-                 // But for this prototype, let's assume if Handshake succeeds, we trigger SMS (Data).
-                 // So we don't strictly need to send a Key Tone if SMS handles the key.
-                 // The user said: "If Bob hears only 2.2k... replies Audible Pong... app shows Securing."
-                 // So we proceed to SMS Verification regardless.
-                 
-                 completeHandshake(remotePhoneNumber)
+             log("Alice: Pong Detected! Silent=$silentPong, Audible=$audiblePong")
+             completeHandshake(remotePhoneNumber)
+        }
+    }
+
+    private fun runBobSequence(remotePhoneNumber: String) {
+        handshakeState.transitionTo(HandshakeState.State.LISTENING_FOR_PING)
+        log("Bob: Listening for LAYERED PING...")
+        
+        // Bob listens first
+        audioTransceiver.startDualListening(
+            AudioTransceiver.FREQUENCY_UNIVERSAL,
+            AudioTransceiver.FREQUENCY_GHOST_PING
+        ) { audiblePing, silentPing ->
+            
+            log("Bob: Ping Detected! Silent=$silentPing, Audible=$audiblePing")
+            
+            // 1. Mute to reply
+            audioTransceiver.muteProximity()
+            
+            handshakeState.transitionTo(HandshakeState.State.SENDING_PONG)
+            
+            if (silentPing) {
+                log("Bob: Sending Silent Pong...")
+                audioTransceiver.sendPing(AudioTransceiver.FREQUENCY_GHOST_PONG)
+            } else {
+                log("Bob: Sending Audible Pong...")
+                audioTransceiver.sendPing(AudioTransceiver.FREQUENCY_UNIVERSAL_PONG)
             }
-        } else {
-            // Role: Bob (Responder)
-            // 1. Listen for Layered Ping (2.2k OR 19k)
-            log("Bob: Listening for LAYERED PING...")
-            audioTransceiver.startDualListening(
-                AudioTransceiver.FREQUENCY_UNIVERSAL, 
-                AudioTransceiver.FREQUENCY_GHOST_PING
-            ) { audiblePing, silentPing ->
-                
-                log("Bob: Ping Detected! Silent=$silentPing, Audible=$audiblePing")
-                
-                if (silentPing) {
-                    // High Speed Path
-                    log("Bob: High Quality Link (5G). Sending Silent Pong (19.5k)...")
-                    audioTransceiver.sendPing(AudioTransceiver.FREQUENCY_GHOST_PONG)
-                } else {
-                    // Low Speed Path (3G Fallback)
-                    log("Bob: Low Quality Link (3G/Legacy). Sending Audible Pong (2.5k)...")
-                    audioTransceiver.sendPing(AudioTransceiver.FREQUENCY_UNIVERSAL_PONG)
-                }
-                
-                // 2. Complete and wait for SMS
-                completeHandshake(remotePhoneNumber)
-            }
+            
+            completeHandshake(remotePhoneNumber)
         }
     }
 
@@ -94,17 +130,23 @@ class GhostHandshakeManager(
     }
 
     private fun completeHandshake(remotePhoneNumber: String) {
-        log("Handshake Audio Phase Complete. Triggering SMS Protocol...")
+        handshakeState.transitionTo(HandshakeState.State.SECURE)
+        log("Handshake Audio Phase Complete. Unmuting and Triggering SMS Protocol...")
+        
+        // Stop listening loop
         audioTransceiver.stopListening()
         
-        // "I heard you on voice, now I'm triggering the SMS handshake."
-        protocolOrchestrator.startSecureSession(remotePhoneNumber)
+        // Play success chime
+        audioTransceiver.playSystemTone(500) 
         
-        isHandshakeComplete.set(true)
+        // Unmute Line
+        audioTransceiver.unmuteProximity()
+        
+        // Trigger verification (Double Ratchet via SMS)
+        protocolOrchestrator.startSecureSession(remotePhoneNumber)
     }
 
     private fun log(msg: String) {
         android.util.Log.d("SigaoGhost", msg)
-        // Pipe to Flutter via AudioTransceiver's logger if hooked
     }
 }
