@@ -1,0 +1,1 @@
+/usr/bin/cc  -Wall -Wno-strict-overflow -std=gnu11 -fPIC -g -O2 -DDUMP -Wl,--dependency-file=CMakeFiles/tollr.dir/link.d CMakeFiles/tollr.dir/tollr.c.o -o tollr

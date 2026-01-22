@@ -1,0 +1,1 @@
+/usr/bin/cc  -Wall -Wno-strict-overflow -std=gnu11 -fPIC -g -O2 -DDUMP -Wl,--dependency-file=CMakeFiles/cohpsk_mod.dir/link.d CMakeFiles/cohpsk_mod.dir/cohpsk_mod.c.o -o cohpsk_mod  -Wl,-rpath,/home/rlutolli/Desktop/uni/INDIVIDUAL_PROJECT/sigao-voice/sigao_core/external/codec2/build/src libcodec2.so.1.2 -lm

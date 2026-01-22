@@ -1,0 +1,1 @@
+/usr/bin/cc  -Wall -Wno-strict-overflow -std=gnu11 -fPIC -g -O2 -DDUMP -Wl,--dependency-file=CMakeFiles/freedv_datac1_rx.dir/link.d CMakeFiles/freedv_datac1_rx.dir/freedv_datac1_rx.c.o -o freedv_datac1_rx  -Wl,-rpath,/home/rlutolli/Desktop/uni/INDIVIDUAL_PROJECT/sigao-voice/sigao_core/external/codec2/build/src ../src/libcodec2.so.1.2 -lm

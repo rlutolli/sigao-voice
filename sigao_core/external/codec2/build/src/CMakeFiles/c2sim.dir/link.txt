@@ -1,0 +1,1 @@
+/usr/bin/cc  -Wall -Wno-strict-overflow -std=gnu11 -fPIC -g -O2 -DDUMP -Wl,--dependency-file=CMakeFiles/c2sim.dir/link.d CMakeFiles/c2sim.dir/c2sim.c.o CMakeFiles/c2sim.dir/sd.c.o -o c2sim  -Wl,-rpath,/home/rlutolli/Desktop/uni/INDIVIDUAL_PROJECT/sigao-voice/sigao_core/external/codec2/build/src libcodec2.so.1.2 -lm
