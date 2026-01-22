@@ -1,7 +1,7 @@
 # Sigao Voice: Legal Transparency Report & Global Regulatory Analysis
 
 **Date:** January 2026
-**Status:** PRIVATE
+**Status:** Public
 **Classification:** Legal Research / User Advisory
 
 ---
