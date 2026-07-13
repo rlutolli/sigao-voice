@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# CMake build artifacts (host and Android)
+sigao_core/build_host/
+sigao_core/external/codec2/build_host_c2/
+sigao_core/external/codec2/build_android_c2/
+
+# Demo output (generated audio, keys, captures)
+demo_output/
+
+# IDE / tool configs
+.kiro/
