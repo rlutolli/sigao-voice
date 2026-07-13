@@ -1,30 +1,48 @@
-# DSP Verification Instructions
+# Core Verification
 
-To verify the Phase 6 DSP Hardening (LDPC + Jitter Buffer), you need to run the python simulator `hostile_channel_sim.py`.
-Since `sigao_core` is a C++ library, you must compile it for your host machine (Linux) first.
+Two complementary tests verify the real secure channel (crypto + FEC + modem).
 
-## 1. Build SigaoCore for Linux
+## 1. Build the core for the host
+
 ```bash
 cd sigao_core
-mkdir -p build
-cd build
-cmake ..
-make
+cmake -S . -B build_host
+cmake --build build_host
 ```
-*Note: Ensure `codec2` and `openssl` dev libraries are installed (`sudo apt install libcodec2-dev libssl-dev` or similar, or use the included sources).*
 
-## 2. Run the Simulator
+This produces `libsigao_core.{so,dylib}` and the `sigao_selftest` executable.
+The core has **no external dependencies** (no OpenSSL, no Codec2).
+
+## 2. C++ self-test (known-answer vectors + round-trips)
+
 ```bash
-cd ../../tests
-python3 hostile_channel_sim.py
+./build_host/sigao_selftest
 ```
 
-## Expected Output
-The simulator will:
-1.  Create a Modem with DSP Hardening enabled.
-2.  Generate 50 frames of voice.
-3.  Simulate 20% Packet Loss and 50ms Jitter.
-4.  Inject packets into the `SigaoDSP` Jitter Buffer.
-5.  Report "Playback Recovered" or "Buffering" states.
+Checks:
+1. **X25519** against the RFC 7748 known-answer vector
+2. **ECDH** two-party key agreement (and that unrelated keys differ)
+3. **AEAD** encrypt/decrypt round-trip and tamper rejection
+4. **Hamming(7,4) FEC** round-trip and single-bit error correction
+5. **FSK modem** byte loopback (including a leading sample offset)
+6. **End-to-end secure channel** (clean)
+7. **End-to-end secure channel** with additive Gaussian noise
 
-Success is defined by the Jitter Buffer successfully re-ordering the shuffled packets and outputting audio frames despite the loss/delay.
+Exit code `0` means all checks passed.
+
+## 3. Python hostile-channel simulator (drives the compiled library)
+
+```bash
+python3 tests/hostile_channel_sim.py
+```
+
+Loads the shared library via `ctypes`, performs an X25519 handshake, then sends
+a message through `tx_secure` → simulated channel (leading silence + additive
+noise + amplitude scaling) → `rx_secure`, reporting the recovery rate across a
+noise sweep.
+
+## Expected result
+
+Both tests report `RESULT: PASS`. Clean and low-noise channels recover the
+plaintext exactly; the AEAD tag guarantees that any frame that *does* decode is
+authentic.
