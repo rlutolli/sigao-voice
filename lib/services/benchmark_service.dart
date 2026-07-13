@@ -7,6 +7,13 @@ class BenchmarkService {
   final SigaoCoreFFI _ffi = SigaoCoreFFI();
   final LogService _log = LogService();
 
+  // A self-derived key (our own keypair) so the benchmark can exercise the
+  // full encrypt -> FEC -> modulate -> demodulate -> decrypt pipeline locally.
+  List<int> _benchKey() {
+    final kp = _ffi.generateKeyPair();
+    return _ffi.computeSharedKey(kp['private']!, kp['public']!);
+  }
+
   Future<void> runFullSuite(Function(String) onProgress) async {
     _log.info("Starting System Benchmark Suite...");
     onProgress("Starting System Benchmark Suite...");
@@ -41,34 +48,45 @@ class BenchmarkService {
   }
 
   Future<void> _testModulation(Function(String) onProgress) async {
-    onProgress("Running Modulation Stress Test (100 iter)...");
+    onProgress("Running Secure Modulation Test (100 iter)...");
+    final key = _benchKey();
     final stopwatch = Stopwatch()..start();
-    
+
     for (int i = 0; i < 100; i++) {
-       _ffi.modulateMessage("Hello Sigao Benchmark $i");
+      _ffi.txSecure(key, "Hello Sigao Benchmark $i".codeUnits);
     }
-    
+
     stopwatch.stop();
     final avg = stopwatch.elapsedMilliseconds / 100;
-    onProgress("Modem: 100 Messages modulated in ${stopwatch.elapsedMilliseconds}ms (Avg: ${avg.toStringAsFixed(2)}ms)");
+    onProgress("Modem: 100 messages encrypted+modulated in ${stopwatch.elapsedMilliseconds}ms (Avg: ${avg.toStringAsFixed(2)}ms)");
   }
 
   Future<void> _testAudioPipeline(Function(String) onProgress) async {
-    onProgress("Running Audio Pipeline Stress Test (500 frames)...");
+    onProgress("Running Secure Round-Trip Test (200 frames)...");
+    final key = _benchKey();
     final stopwatch = Stopwatch()..start();
-    
-    // Simulate 500 frames of 40ms audio (20 seconds of talk time)
-    // This often reveals memory leaks in naive implementations.
-    List<int> dummyPcm = List.filled(320, 0); // Silence/Flat
-    
-    for (int i = 0; i < 500; i++) {
-      _ffi.ingestAudio(dummyPcm);
-      if (i % 100 == 0) onProgress("  Pipeline: Processed $i frames...");
+
+    int recovered = 0;
+    for (int i = 0; i < 200; i++) {
+      final msg = "frame-$i".codeUnits;
+      final audio = _ffi.txSecure(key, msg);
+      final back = _ffi.rxSecure(key, audio.toList());
+      if (back != null && _listEq(back, msg)) recovered++;
+      if (i % 50 == 0) onProgress("  Pipeline: round-tripped $i frames...");
       await Future.delayed(Duration.zero); // Yield to event loop
     }
-    
+
     stopwatch.stop();
-    final throughput = 500 / (stopwatch.elapsedMilliseconds / 1000);
-    onProgress("Audio: 500 Frames processed in ${stopwatch.elapsedMilliseconds}ms (${throughput.toStringAsFixed(1)} fps)");
+    final throughput = 200 / (stopwatch.elapsedMilliseconds / 1000);
+    onProgress("Audio: 200 secure round-trips in ${stopwatch.elapsedMilliseconds}ms "
+        "($recovered/200 recovered, ${throughput.toStringAsFixed(1)} fps)");
+  }
+
+  bool _listEq(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 }

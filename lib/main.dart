@@ -5,6 +5,7 @@ import 'audio/audio_engine.dart';
 import 'ui/theme/sigao_theme.dart';
 import 'ui/theme/theme_provider.dart';
 import 'ui/screens/home_screen.dart';
+import 'ui/screens/secure_link_screen.dart';
 import 'services/log_service.dart';
 import 'services/key_exchange_service.dart';
 import 'services/contacts_provider.dart';
@@ -51,16 +52,21 @@ void main() async {
 class SigaoApp extends StatelessWidget {
   const SigaoApp({super.key});
 
+  static final GlobalKey<NavigatorState> navKey = GlobalKey<NavigatorState>();
+
   @override
   Widget build(BuildContext context) {
     // Defer Audio Init to ensure UI renders first
     WidgetsBinding.instance.addPostFrameCallback((_) {
        Provider.of<AudioEngine>(context, listen: false).initSystem();
+       // If launched with secure-link intent extras, auto-run the test screen.
+       SecureLinkScreen.maybeAutoLaunch(navKey);
     });
 
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         return MaterialApp(
+          navigatorKey: navKey,
           title: 'Sigao Voice',
           debugShowCheckedModeBanner: false,
           theme: SigaoTheme.lightTheme,

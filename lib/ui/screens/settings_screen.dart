@@ -143,7 +143,7 @@ class SettingsScreen extends StatelessWidget {
               applicationLegalese: "UI based on Signal Clone. Open Source MIT License.",
               children: [
                 const SizedBox(height: 16),
-                const Text("Core Protocol: Codec2 (1200bps) + FBMC + AES-256-GCM"),
+                const Text("Core Protocol: X25519 ECDH + XSalsa20-Poly1305 (AEAD) + Hamming(7,4) FEC + binary FSK modem"),
               ],
             );
           },

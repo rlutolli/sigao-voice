@@ -94,16 +94,13 @@ class KeyExchangeService extends ChangeNotifier {
   void computeSharedSecret(Uint8List theirEphemeralPub) {
     if (_ephemeralKeyPair == null) return;
     
-    // X25519 Diffie-Hellman via SigaoCore Native (Reliable)
+    // X25519 Diffie-Hellman via SigaoCore native (TweetNaCl crypto_box_beforenm).
+    // Both peers derive an identical 32-byte key from (myPrivate, theirPublic).
     _ephemeralKeyPair!.secretKey.runUnlockedSync((secretBytes) {
-      final secretList = _coreFFI.computeSharedSecret(
-          secretBytes, 
-          theirEphemeralPub
-      );
-      _sharedSecret = Uint8List.fromList(secretList);
+      _sharedSecret = _coreFFI.computeSharedKey(secretBytes, theirEphemeralPub);
     });
-    
+
     notifyListeners();
-    debugPrint("ECDH: Session Established (Native verified)");
+    debugPrint("ECDH: Session established (X25519 shared key derived)");
   }
 }

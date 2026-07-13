@@ -26,6 +26,9 @@ plugins {
     id("com.android.application") version "8.11.1" apply false
     id("org.jetbrains.kotlin.android") version "2.2.20" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.2.20" apply false
+    // Lets Gradle auto-provision the JDK toolchains some plugins require
+    // (e.g. flutter_callkit_incoming pins Java 17) when none is installed.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
 }
 
 include(":app")

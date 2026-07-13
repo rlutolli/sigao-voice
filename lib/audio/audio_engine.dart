@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
-import 'dart:math';
 import '../ffi/sigao_core_ffi.dart';
 import '../services/log_service.dart';
 
@@ -17,16 +16,23 @@ class AudioEngine extends ChangeNotifier {
   // FFI Wrapper
   SigaoCoreFFI? _ffi;
   Timer? _captureMockTimer;
+  List<int>? _loopbackKey;
 
   // Pre-initialize SoLoud on startup
   Future<void> initSystem() async {
-    if (!_soloud.isInitialized) {
+    if (_soloud.isInitialized) return;
+    try {
       await _soloud.init(
-        sampleRate: 8000, 
-        bufferSize: 1024, 
+        sampleRate: 8000,
+        bufferSize: 1024,
         channels: Channels.mono,
       );
       debugPrint("AudioEngine: SoLoud Initialized");
+    } catch (e) {
+      // Headless / audioless environments (e.g. emulator with -no-audio) can
+      // fail here. Audio is optional for the secure-link/data paths, so log
+      // and continue instead of taking down the app.
+      debugPrint("AudioEngine: SoLoud init skipped ($e)");
     }
   }
 
@@ -45,34 +51,36 @@ class AudioEngine extends ChangeNotifier {
 
       // Initialize Core
       _ffi = SigaoCoreFFI();
+      LogService().info("Sigao Core: ${_ffi!.version()}");
 
-      // Start "Capture" Loop
-      // In a real app with 'mic_stream', we would listen to string.
-      // Since we can't fully run/debug plugin deps here, 
-      // I will implement a Mock Capture Timer that feeds "Noise/Tone" to the Ingest 
-      // to demonstrate the FFI pipeline is working (You will hear modulated chirps).
-      
-      // REAL IMPLEMENTATION TODO: Replace this timer with `MicStream.stream.listen((data) => ...)`
-      _captureMockTimer = Timer.periodic(const Duration(milliseconds: 40), (timer) {
-        // Generate 320 samples (40ms @ 8kHz)
-        // Simulating Voice: A mix of sine waves
-        List<int> dummyPcm = List.generate(320, (i) {
-          // 400Hz Tone (Voice fundamental approx)
-          return (10000 * sin(2 * pi * 400 * (timer.tick * 320 + i) / 8000)).toInt();
-        });
+      // Derive a local key so we can demonstrate the REAL secure pipeline
+      // (encrypt -> FEC -> modulate -> demodulate -> decrypt) as a self-loopback.
+      final kp = _ffi!.generateKeyPair();
+      _loopbackKey = _ffi!.computeSharedKey(kp['private']!, kp['public']!);
 
-        // 1. INGEST (Codec2 -> Encrypt -> Modulate)
-        List<double> modulatedFloat = _ffi!.ingestAudio(dummyPcm);
-        
-        // 2. PLAYBACK / LOGGING
-        if (modulatedFloat.isNotEmpty) {
-           final msg = "[CORE] Voice Pipeline: Mic(${dummyPcm.length}) -> Codec2/Modem -> Tx(${modulatedFloat.length} samples)";
-           debugPrint(msg);
-           LogService().info(msg);
-        } else {
-           final err = "[CORE] Modulation returned 0 samples!";
-           debugPrint(err);
-           LogService().error(err);
+      // NOTE: This timer is a stand-in for real microphone capture and a real
+      // peer transport, which are not yet wired (see README "Status"). It feeds
+      // a text payload through the actual native secure channel and verifies the
+      // round-trip, so the cryptographic + DSP pipeline is exercised for real.
+      int counter = 0;
+      _captureMockTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+        final message = "Sigao secure frame #${counter++}";
+        try {
+          final audio = _ffi!.txSecure(_loopbackKey!, message.codeUnits);
+          final recovered = _ffi!.rxSecure(_loopbackKey!, audio.toList());
+          if (recovered != null) {
+            final text = String.fromCharCodes(recovered);
+            final msg = "[CORE] Secure loopback OK: "
+                "tx ${audio.length} samples -> rx \"$text\"";
+            debugPrint(msg);
+            LogService().info(msg);
+          } else {
+            const err = "[CORE] Secure loopback FAILED to recover frame";
+            debugPrint(err);
+            LogService().error(err);
+          }
+        } catch (e) {
+          LogService().error("[CORE] Pipeline error: $e");
         }
       });
 

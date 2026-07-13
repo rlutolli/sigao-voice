@@ -1,176 +1,293 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 
-// Typedefs (matching C++ signatures)
-typedef sigao_create_modem_c = Pointer<Void> Function(Int32 sampleRate);
-typedef sigao_create_modem_dart = Pointer<Void> Function(int sampleRate);
+// FFI bindings for the Sigao Core native library.
+//
+// The native side provides a real secure acoustic data channel:
+//   X25519 ECDH  ->  XSalsa20-Poly1305 AEAD  ->  Hamming(7,4) FEC  ->  FSK modem
+//
+// See sigao_core/sigao_core.h for the authoritative C signatures.
 
-typedef sigao_destroy_modem_c = Void Function(Pointer<Void> handle);
-typedef sigao_destroy_modem_dart = void Function(Pointer<Void> handle);
+// ---- Native typedefs ----
+typedef _CreateModemC = Pointer<Void> Function(Int32 sampleRate);
+typedef _CreateModemD = Pointer<Void> Function(int sampleRate);
 
-typedef sigao_modulate_c = Int32 Function(Pointer<Void> handle, Pointer<Utf8> msg, Pointer<Pointer<Float>> outBuffer);
-typedef sigao_modulate_dart = int Function(Pointer<Void> handle, Pointer<Utf8> msg, Pointer<Pointer<Float>> outBuffer);
+typedef _DestroyModemC = Void Function(Pointer<Void> handle);
+typedef _DestroyModemD = void Function(Pointer<Void> handle);
 
-typedef sigao_audio_ingest_c = Int32 Function(Pointer<Void> handle, Pointer<Int16> pcm, Int32 len, Pointer<Pointer<Float>> outBuffer);
-typedef sigao_audio_ingest_dart = int Function(Pointer<Void> handle, Pointer<Int16> pcm, int len, Pointer<Pointer<Float>> outBuffer);
+typedef _VersionC = Pointer<Utf8> Function();
+typedef _VersionD = Pointer<Utf8> Function();
 
-typedef sigao_free_buffer_c = Void Function(Pointer<Float> buffer);
-typedef sigao_free_buffer_dart = void Function(Pointer<Float> buffer);
+typedef _FreeBufferC = Void Function(Pointer<Float> buffer);
+typedef _FreeBufferD = void Function(Pointer<Float> buffer);
 
-typedef sigao_detect_handshake_c = Int32 Function(Pointer<Void> handle, Pointer<Int16> pcm, Int32 len);
-typedef sigao_detect_handshake_dart = int Function(Pointer<Void> handle, Pointer<Int16> pcm, int len);
+typedef _GenKeypairC = Void Function(Pointer<Uint8> pub, Pointer<Uint8> priv);
+typedef _GenKeypairD = void Function(Pointer<Uint8> pub, Pointer<Uint8> priv);
 
-typedef sigao_gen_keypair_c = Void Function(Pointer<Uint8> pub, Pointer<Uint8> priv);
-typedef sigao_gen_keypair_dart = void Function(Pointer<Uint8> pub, Pointer<Uint8> priv);
+typedef _ComputeSecretC = Int32 Function(
+    Pointer<Uint8> sharedKey, Pointer<Uint8> myPriv, Pointer<Uint8> theirPub);
+typedef _ComputeSecretD = int Function(
+    Pointer<Uint8> sharedKey, Pointer<Uint8> myPriv, Pointer<Uint8> theirPub);
 
-typedef sigao_compute_secret_c = Void Function(Pointer<Uint8> secret, Pointer<Uint8> myPriv, Pointer<Uint8> theirPub);
-typedef sigao_compute_secret_dart = void Function(Pointer<Uint8> secret, Pointer<Uint8> myPriv, Pointer<Uint8> theirPub);
+typedef _EncryptC = Int32 Function(Pointer<Uint8> key, Pointer<Uint8> msg, Int32 msglen,
+    Pointer<Uint8> out, Int32 maxOut);
+typedef _EncryptD = int Function(Pointer<Uint8> key, Pointer<Uint8> msg, int msglen,
+    Pointer<Uint8> out, int maxOut);
+
+typedef _TxSecureC = Int32 Function(Pointer<Void> handle, Pointer<Uint8> key,
+    Pointer<Uint8> msg, Int32 msglen, Pointer<Pointer<Float>> outBuffer);
+typedef _TxSecureD = int Function(Pointer<Void> handle, Pointer<Uint8> key,
+    Pointer<Uint8> msg, int msglen, Pointer<Pointer<Float>> outBuffer);
+
+typedef _RxSecureC = Int32 Function(Pointer<Void> handle, Pointer<Uint8> key,
+    Pointer<Float> signal, Int32 len, Pointer<Uint8> out, Int32 maxOut);
+typedef _RxSecureD = int Function(Pointer<Void> handle, Pointer<Uint8> key,
+    Pointer<Float> signal, int len, Pointer<Uint8> out, int maxOut);
+
+typedef _VoiceBitrateC = Int32 Function(Pointer<Void> handle);
+typedef _VoiceBitrateD = int Function(Pointer<Void> handle);
+
+typedef _DetectHandshakeC = Int32 Function(Pointer<Void> handle, Pointer<Int16> pcm, Int32 len);
+typedef _DetectHandshakeD = int Function(Pointer<Void> handle, Pointer<Int16> pcm, int len);
+
+/// Thrown when the native channel cannot produce or recover a frame.
+class SigaoCoreException implements Exception {
+  final String message;
+  SigaoCoreException(this.message);
+  @override
+  String toString() => 'SigaoCoreException: $message';
+}
 
 class SigaoCoreFFI {
-  late DynamicLibrary _lib;
-  late Pointer<Void> _modemHandle;
-  
-  // Functions
-  late sigao_create_modem_dart _createModem;
-  late sigao_destroy_modem_dart _destroyModem;
-  late sigao_modulate_dart _modulate;
-  late sigao_audio_ingest_dart _ingest;
-  late sigao_detect_handshake_dart _detect;
-  late sigao_gen_keypair_dart _genKeyPair;
-  late sigao_compute_secret_dart _computeSecret;
-  late sigao_free_buffer_dart _freeBuffer;
+  static const int keyBytes = 32;
 
-  SigaoCoreFFI() {
-    // Load library
-    if (Platform.isAndroid) {
-      _lib = DynamicLibrary.open("libsigao_core.so");
-    } else if (Platform.isLinux) {
-      // Path assumption for dev
-      _lib = DynamicLibrary.open("../sigao_core/build/libsigao_core.so");
-    } else {
-      _lib = DynamicLibrary.process();
-    }
+  late final DynamicLibrary _lib;
+  late final Pointer<Void> _handle;
 
-    // Lookup functions
-    _createModem = _lib.lookupFunction<sigao_create_modem_c, sigao_create_modem_dart>("sigao_create_modem");
-    _destroyModem = _lib.lookupFunction<sigao_destroy_modem_c, sigao_destroy_modem_dart>("sigao_destroy_modem");
-    _modulate = _lib.lookupFunction<sigao_modulate_c, sigao_modulate_dart>("sigao_modulate");
-    _ingest = _lib.lookupFunction<sigao_audio_ingest_c, sigao_audio_ingest_dart>("sigao_audio_ingest");
-    _detect = _lib.lookupFunction<sigao_detect_handshake_c, sigao_detect_handshake_dart>("sigao_detect_handshake");
-    _genKeyPair = _lib.lookupFunction<sigao_gen_keypair_c, sigao_gen_keypair_dart>("sigao_gen_keypair");
-    _computeSecret = _lib.lookupFunction<sigao_compute_secret_c, sigao_compute_secret_dart>("sigao_compute_secret");
-    _freeBuffer = _lib.lookupFunction<sigao_free_buffer_c, sigao_free_buffer_dart>("sigao_free_buffer");
-    
-    // Create instance
-    _modemHandle = _createModem(8000);
+  late final _CreateModemD _createModem;
+  late final _DestroyModemD _destroyModem;
+  late final _VersionD _version;
+  late final _FreeBufferD _freeBuffer;
+  late final _GenKeypairD _genKeypair;
+  late final _ComputeSecretD _computeSecret;
+  late final _EncryptD _encrypt;
+  late final _EncryptD _decrypt;
+  late final _TxSecureD _txSecure;
+  late final _RxSecureD _rxSecure;
+  late final _TxSecureD _txVoice;
+  late final _RxSecureD _rxVoice;
+  late final _VoiceBitrateD _voiceBitrate;
+  late final _DetectHandshakeD _detectHandshake;
+
+  SigaoCoreFFI({int sampleRate = 8000}) {
+    _lib = _open();
+
+    _createModem = _lib.lookupFunction<_CreateModemC, _CreateModemD>('sigao_create_modem');
+    _destroyModem = _lib.lookupFunction<_DestroyModemC, _DestroyModemD>('sigao_destroy_modem');
+    _version = _lib.lookupFunction<_VersionC, _VersionD>('sigao_version');
+    _freeBuffer = _lib.lookupFunction<_FreeBufferC, _FreeBufferD>('sigao_free_buffer');
+    _genKeypair = _lib.lookupFunction<_GenKeypairC, _GenKeypairD>('sigao_gen_keypair');
+    _computeSecret = _lib.lookupFunction<_ComputeSecretC, _ComputeSecretD>('sigao_compute_secret');
+    _encrypt = _lib.lookupFunction<_EncryptC, _EncryptD>('sigao_encrypt');
+    _decrypt = _lib.lookupFunction<_EncryptC, _EncryptD>('sigao_decrypt');
+    _txSecure = _lib.lookupFunction<_TxSecureC, _TxSecureD>('sigao_tx_secure');
+    _rxSecure = _lib.lookupFunction<_RxSecureC, _RxSecureD>('sigao_rx_secure');
+    _txVoice = _lib.lookupFunction<_TxSecureC, _TxSecureD>('sigao_tx_voice');
+    _rxVoice = _lib.lookupFunction<_RxSecureC, _RxSecureD>('sigao_rx_voice');
+    _voiceBitrate =
+        _lib.lookupFunction<_VoiceBitrateC, _VoiceBitrateD>('sigao_voice_gross_bitrate');
+    _detectHandshake =
+        _lib.lookupFunction<_DetectHandshakeC, _DetectHandshakeD>('sigao_detect_handshake');
+
+    _handle = _createModem(sampleRate);
   }
+
+  DynamicLibrary _open() {
+    if (Platform.isAndroid) return DynamicLibrary.open('libsigao_core.so');
+    if (Platform.isLinux) {
+      return DynamicLibrary.open('sigao_core/build_host/libsigao_core.so');
+    }
+    if (Platform.isMacOS) {
+      return DynamicLibrary.open('sigao_core/build_host/libsigao_core.dylib');
+    }
+    if (Platform.isWindows) return DynamicLibrary.open('sigao_core.dll');
+    return DynamicLibrary.process();
+  }
+
+  String version() => _version().toDartString();
 
   void dispose() {
-    _destroyModem(_modemHandle);
+    _destroyModem(_handle);
   }
 
-  List<double> modulateMessage(String message) {
-    final msgPtr = message.toNativeUtf8();
-    final outBufPtr = calloc<Pointer<Float>>();
-    
+  // ---- Key agreement ----
+
+  /// Generates an X25519 keypair: {'public': [...32], 'private': [...32]}.
+  Map<String, Uint8List> generateKeyPair() {
+    final pub = calloc<Uint8>(keyBytes);
+    final priv = calloc<Uint8>(keyBytes);
     try {
-      int len = _modulate(_modemHandle, msgPtr, outBufPtr);
-      if (len <= 0) return [];
-      
-      final floatPtr = outBufPtr.value;
-      final result = <double>[];
-      for (int i = 0; i < len; i++) {
-        result.add(floatPtr[i]);
-      }
-      
-      _freeBuffer(floatPtr);
-      return result;
+      _genKeypair(pub, priv);
+      return {
+        'public': Uint8List.fromList(pub.asTypedList(keyBytes)),
+        'private': Uint8List.fromList(priv.asTypedList(keyBytes)),
+      };
     } finally {
-      calloc.free(msgPtr);
-      calloc.free(outBufPtr);
+      calloc.free(pub);
+      calloc.free(priv);
     }
   }
 
-  // New: Ingest PCM Audio (Short[]) -> Return Modulated Floats
-  List<double> ingestAudio(List<int> pcmData) {
-    final pcmPtr = calloc<Int16>(pcmData.length);
-    final pcmList = pcmPtr.asTypedList(pcmData.length);
-    pcmList.setAll(0, pcmData);
-    
-    final outBufPtr = calloc<Pointer<Float>>();
-
+  /// Derives the 32-byte shared key from our private key and the peer's public key.
+  Uint8List computeSharedKey(List<int> myPrivate, List<int> theirPublic) {
+    _require(myPrivate.length == keyBytes && theirPublic.length == keyBytes,
+        'keys must be 32 bytes');
+    final out = calloc<Uint8>(keyBytes);
+    final priv = calloc<Uint8>(keyBytes)..asTypedList(keyBytes).setAll(0, myPrivate);
+    final pub = calloc<Uint8>(keyBytes)..asTypedList(keyBytes).setAll(0, theirPublic);
     try {
-      // Pass to C++
-      int len = _ingest(_modemHandle, pcmPtr, pcmData.length, outBufPtr);
-      if (len <= 0) return [];
-
-      final floatPtr = outBufPtr.value;
-      final result = <double>[];
-      for (int i = 0; i < len; i++) {
-        result.add(floatPtr[i]);
-      }
-      
-      _freeBuffer(floatPtr);
-      return result;
+      final rc = _computeSecret(out, priv, pub);
+      if (rc != 0) throw SigaoCoreException('compute_secret failed ($rc)');
+      return Uint8List.fromList(out.asTypedList(keyBytes));
     } finally {
-      calloc.free(pcmPtr);
-      calloc.free(outBufPtr);
-    }
-  }
-  // New: Handshake Detection
-  bool detectHandshake(List<int> pcmData) {
-    if (pcmData.isEmpty) return false;
-    
-    final pcmPtr = calloc<Int16>(pcmData.length);
-    final pcmList = pcmPtr.asTypedList(pcmData.length);
-    pcmList.setAll(0, pcmData);
-
-    try {
-      int result = _detect(_modemHandle, pcmPtr, pcmData.length);
-      return result == 1;
-    } finally {
-      calloc.free(pcmPtr);
+      calloc.free(out);
+      calloc.free(priv);
+      calloc.free(pub);
     }
   }
 
-  // --- ECDH Operations ---
+  // ---- AEAD (no modem) ----
 
-  // Returns {public: List<int>, private: List<int>}
-  Map<String, List<int>> generateKeyPair() {
-    final pubPtr = calloc<Uint8>(32);
-    final privPtr = calloc<Uint8>(32);
-
+  Uint8List encrypt(List<int> sharedKey, List<int> message) {
+    _require(sharedKey.length == keyBytes, 'key must be 32 bytes');
+    final maxOut = message.length + 64;
+    final key = calloc<Uint8>(keyBytes)..asTypedList(keyBytes).setAll(0, sharedKey);
+    final msg = calloc<Uint8>(message.isEmpty ? 1 : message.length);
+    if (message.isNotEmpty) msg.asTypedList(message.length).setAll(0, message);
+    final out = calloc<Uint8>(maxOut);
     try {
-      _genKeyPair(pubPtr, privPtr);
-      
-      final pubList = pubPtr.asTypedList(32).toList();
-      final privList = privPtr.asTypedList(32).toList();
-      
-      return {'public': pubList, 'private': privList};
+      final n = _encrypt(key, msg, message.length, out, maxOut);
+      if (n < 0) throw SigaoCoreException('encrypt failed');
+      return Uint8List.fromList(out.asTypedList(n));
     } finally {
-      calloc.free(pubPtr);
-      calloc.free(privPtr);
+      calloc.free(key);
+      calloc.free(msg);
+      calloc.free(out);
     }
   }
 
-  List<int> computeSharedSecret(List<int> myPrivate, List<int> theirPublic) {
-    if (myPrivate.length != 32 || theirPublic.length != 32) throw Exception("Invalid Key Length");
-
-    final secretPtr = calloc<Uint8>(32);
-    final privPtr = calloc<Uint8>(32);
-    final pubPtr = calloc<Uint8>(32);
-    
-    privPtr.asTypedList(32).setAll(0, myPrivate);
-    pubPtr.asTypedList(32).setAll(0, theirPublic);
-
+  Uint8List decrypt(List<int> sharedKey, List<int> ciphertext) {
+    _require(sharedKey.length == keyBytes, 'key must be 32 bytes');
+    final maxOut = ciphertext.length + 16;
+    final key = calloc<Uint8>(keyBytes)..asTypedList(keyBytes).setAll(0, sharedKey);
+    final inp = calloc<Uint8>(ciphertext.length)..asTypedList(ciphertext.length).setAll(0, ciphertext);
+    final out = calloc<Uint8>(maxOut);
     try {
-      _computeSecret(secretPtr, privPtr, pubPtr);
-      return secretPtr.asTypedList(32).toList();
+      final n = _decrypt(key, inp, ciphertext.length, out, maxOut);
+      if (n < 0) throw SigaoCoreException('decrypt/authentication failed');
+      return Uint8List.fromList(out.asTypedList(n));
     } finally {
-      calloc.free(secretPtr);
-      calloc.free(privPtr);
-      calloc.free(pubPtr);
+      calloc.free(key);
+      calloc.free(inp);
+      calloc.free(out);
     }
+  }
+
+  // ---- End-to-end secure channel ----
+
+  /// Encrypt + FEC + modulate a message into audio samples.
+  Float32List txSecure(List<int> sharedKey, List<int> message) {
+    _require(sharedKey.length == keyBytes, 'key must be 32 bytes');
+    final key = calloc<Uint8>(keyBytes)..asTypedList(keyBytes).setAll(0, sharedKey);
+    final msg = calloc<Uint8>(message.isEmpty ? 1 : message.length);
+    if (message.isNotEmpty) msg.asTypedList(message.length).setAll(0, message);
+    final outPtr = calloc<Pointer<Float>>();
+    try {
+      final n = _txSecure(_handle, key, msg, message.length, outPtr);
+      if (n <= 0) throw SigaoCoreException('tx_secure failed');
+      final samples = Float32List.fromList(outPtr.value.asTypedList(n));
+      _freeBuffer(outPtr.value);
+      return samples;
+    } finally {
+      calloc.free(key);
+      calloc.free(msg);
+      calloc.free(outPtr);
+    }
+  }
+
+  /// Demodulate + FEC-decode + verify/decrypt audio samples into a message.
+  /// Returns null if no frame could be recovered/authenticated.
+  Uint8List? rxSecure(List<int> sharedKey, List<double> samples, {int maxMessage = 4096}) {
+    return _rxImpl(_rxSecure, sharedKey, samples, maxMessage);
+  }
+
+  // ---- High-rate voice channel (OFDM/DQPSK, ~3200 bit/s gross) ----
+
+  /// Encrypt + FEC + OFDM-modulate (for compressed voice frames).
+  Float32List txVoice(List<int> sharedKey, List<int> message) {
+    return _txImpl(_txVoice, sharedKey, message);
+  }
+
+  /// Demodulate (OFDM) + FEC-decode + verify/decrypt.
+  Uint8List? rxVoice(List<int> sharedKey, List<double> samples, {int maxMessage = 4096}) {
+    return _rxImpl(_rxVoice, sharedKey, samples, maxMessage);
+  }
+
+  /// Gross (pre-FEC, pre-crypto) bit rate of the OFDM voice modem.
+  int voiceGrossBitrate() => _voiceBitrate(_handle);
+
+  // ---- shared TX/RX plumbing ----
+
+  Float32List _txImpl(_TxSecureD fn, List<int> sharedKey, List<int> message) {
+    _require(sharedKey.length == keyBytes, 'key must be 32 bytes');
+    final key = calloc<Uint8>(keyBytes)..asTypedList(keyBytes).setAll(0, sharedKey);
+    final msg = calloc<Uint8>(message.isEmpty ? 1 : message.length);
+    if (message.isNotEmpty) msg.asTypedList(message.length).setAll(0, message);
+    final outPtr = calloc<Pointer<Float>>();
+    try {
+      final n = fn(_handle, key, msg, message.length, outPtr);
+      if (n <= 0) throw SigaoCoreException('tx failed');
+      final samples = Float32List.fromList(outPtr.value.asTypedList(n));
+      _freeBuffer(outPtr.value);
+      return samples;
+    } finally {
+      calloc.free(key);
+      calloc.free(msg);
+      calloc.free(outPtr);
+    }
+  }
+
+  Uint8List? _rxImpl(_RxSecureD fn, List<int> sharedKey, List<double> samples, int maxMessage) {
+    _require(sharedKey.length == keyBytes, 'key must be 32 bytes');
+    final key = calloc<Uint8>(keyBytes)..asTypedList(keyBytes).setAll(0, sharedKey);
+    final sig = calloc<Float>(samples.length)..asTypedList(samples.length).setAll(0, samples);
+    final out = calloc<Uint8>(maxMessage);
+    try {
+      final n = fn(_handle, key, sig, samples.length, out, maxMessage);
+      if (n < 0) return null;
+      return Uint8List.fromList(out.asTypedList(n));
+    } finally {
+      calloc.free(key);
+      calloc.free(sig);
+      calloc.free(out);
+    }
+  }
+
+  // ---- Handshake tone detection ----
+
+  bool detectHandshake(List<int> pcm) {
+    if (pcm.isEmpty) return false;
+    final p = calloc<Int16>(pcm.length)..asTypedList(pcm.length).setAll(0, pcm);
+    try {
+      return _detectHandshake(_handle, p, pcm.length) == 1;
+    } finally {
+      calloc.free(p);
+    }
+  }
+
+  void _require(bool cond, String msg) {
+    if (!cond) throw SigaoCoreException(msg);
   }
 }

@@ -19,6 +19,8 @@ class MainActivity : FlutterActivity() {
     private val REQUEST_ROLE_CODE = 1
 
     private var methodChannel: MethodChannel? = null
+    private var secureLinkChannel: MethodChannel? = null
+    private var lastSecureLinkConfig: Map<String, Any?>? = null
     
     // Log Streaming
     private val LOG_CHANNEL_NAME = "com.sigao.voice/logs"
@@ -59,8 +61,27 @@ class MainActivity : FlutterActivity() {
         return audioTransceiver!!
     }
 
+    private fun secureLinkConfigFrom(intent: Intent?): Map<String, Any?>? {
+        val role = intent?.getStringExtra("slrole") ?: return null
+        return mapOf(
+            "role" to role,
+            "host" to (intent.getStringExtra("slhost") ?: "127.0.0.1"),
+            "port" to intent.getIntExtra("slport", 7100),
+            "frames" to intent.getIntExtra("slframes", 5)
+        )
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Keep getIntent() current so getConfig() reflects the latest launch.
+        setIntent(intent)
+
+        // If launched/redelivered with secure-link extras, (re)run the test
+        // screen even on a warm start (singleTop -> onNewIntent).
+        val cfg = secureLinkConfigFrom(intent)
+        if (cfg != null) {
+            runOnUiThread { secureLinkChannel?.invokeMethod("runConfig", cfg) }
+        }
         
         val transceiver = ensureTransceiverReady()
         
@@ -178,8 +199,16 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
-        // 3. Ghost Handshake (Fixed Threading)
-        // Ensure the transceiver is ready (lazy init)
+        // 2b. Secure Link test config (read launch-intent extras for headless driving)
+        secureLinkChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.sigao.voice/securelink")
+        secureLinkChannel!!.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getConfig" -> result.success(secureLinkConfigFrom(intent))
+                else -> result.notImplemented()
+            }
+        }
+
+        // 3. Ghost Handshake (Fixed Threading)        // Ensure the transceiver is ready (lazy init)
         val transceiver = ensureTransceiverReady()
         
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.sigao.voice/handshake").setMethodCallHandler { call, result ->
